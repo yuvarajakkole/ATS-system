@@ -1,0 +1,423 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>ATS Decision Engine</title>
+<style>
+  :root{
+    --bg:#0e1116;
+    --panel:#161b22;
+    --panel-2:#1c2229;
+    --line:#2a313c;
+    --text:#e6e9ee;
+    --muted:#8891a0;
+    --amber:#e0a63b;
+    --amber-dim:#8a6b2e;
+    --red:#d6604d;
+    --green:#4f9d69;
+    --mono: "SF Mono","IBM Plex Mono",ui-monospace,Menlo,Consolas,monospace;
+    --sans: ui-sans-serif,-apple-system,"Segoe UI",Inter,Roboto,sans-serif;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; background:var(--bg); color:var(--text);
+    font-family:var(--sans); line-height:1.5;
+  }
+  header{
+    padding:22px 28px; border-bottom:1px solid var(--line);
+    display:flex; align-items:baseline; justify-content:space-between; gap:16px;
+  }
+  header h1{
+    font-family:var(--mono); font-size:15px; font-weight:600; letter-spacing:0.02em;
+    margin:0; color:var(--text);
+  }
+  header h1 span{color:var(--amber);}
+  header .sub{color:var(--muted); font-size:12px; font-family:var(--mono);}
+  main{max-width:1180px; margin:0 auto; padding:28px;}
+  .grid{display:grid; grid-template-columns:1fr 1fr; gap:18px;}
+  @media(max-width:900px){.grid{grid-template-columns:1fr;}}
+  .panel{
+    background:var(--panel); border:1px solid var(--line); border-radius:6px; padding:18px;
+  }
+  label{
+    display:block; font-size:11px; text-transform:uppercase; letter-spacing:0.06em;
+    color:var(--muted); margin-bottom:8px; font-family:var(--mono);
+  }
+  textarea, input[type=text]{
+    width:100%; background:var(--panel-2); border:1px solid var(--line); border-radius:4px;
+    color:var(--text); padding:10px 12px; font-family:var(--sans); font-size:13.5px;
+    resize:vertical;
+  }
+  textarea{min-height:280px;}
+  input[type=text]{min-height:38px;}
+  .row{margin-bottom:16px;}
+  .row-inline{display:flex; gap:12px; align-items:flex-end;}
+  .row-inline > div{flex:1;}
+  button{
+    background:var(--amber); color:#1a1300; border:none; border-radius:4px;
+    padding:11px 20px; font-weight:600; font-size:13.5px; cursor:pointer;
+    font-family:var(--sans);
+  }
+  button:hover{background:#eeb750;}
+  button:disabled{background:var(--amber-dim); cursor:not-allowed; color:#2a2410;}
+  button.secondary{
+    background:transparent; border:1px solid var(--line); color:var(--text);
+    padding:8px 14px; font-weight:500;
+  }
+  #status{font-family:var(--mono); font-size:12px; color:var(--muted); margin-left:14px;}
+  .results{margin-top:26px; display:none;}
+  .score-hero{
+    display:flex; align-items:center; gap:24px; padding:20px 24px;
+    border:1px solid var(--line); border-radius:6px; background:var(--panel); margin-bottom:18px;
+  }
+  .score-num{
+    font-family:var(--mono); font-size:52px; font-weight:700; line-height:1;
+  }
+  .score-num small{font-size:20px; color:var(--muted); font-weight:400;}
+  .score-label{color:var(--muted); font-size:13px;}
+  .cat-bars{margin-top:8px;}
+  .cat-row{display:grid; grid-template-columns:170px 1fr 60px; gap:10px; align-items:center; margin-bottom:8px; font-family:var(--mono); font-size:12px;}
+  .cat-track{height:8px; background:var(--panel-2); border-radius:4px; overflow:hidden; border:1px solid var(--line);}
+  .cat-fill{height:100%; background:var(--amber);}
+  .cols2{display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:18px;}
+  @media(max-width:900px){.cols2{grid-template-columns:1fr;}}
+  h3{font-family:var(--mono); font-size:12px; text-transform:uppercase; letter-spacing:0.06em; color:var(--muted); margin:0 0 12px;}
+  ul{margin:0; padding-left:18px;}
+  li{margin-bottom:8px; font-size:13.5px;}
+  .strength{color:var(--green);}
+  .weakness{color:var(--red);}
+  .tag{
+    display:inline-block; background:var(--panel-2); border:1px solid var(--line); color:var(--muted);
+    font-family:var(--mono); font-size:11px; padding:2px 8px; border-radius:3px; margin:2px 4px 2px 0;
+  }
+  .risk-high{color:var(--red);} .risk-moderate{color:var(--amber);} .risk-low{color:var(--green);}
+  .verdict{
+    font-size:14px; white-space:pre-wrap; border-top:1px solid var(--line); margin-top:18px; padding-top:16px;
+  }
+  .error{color:var(--red); font-family:var(--mono); font-size:12.5px; margin-top:10px;}
+  details{margin-top:20px;}
+  summary{cursor:pointer; font-family:var(--mono); font-size:12px; color:var(--muted);}
+  pre{background:var(--panel-2); padding:14px; border-radius:4px; overflow:auto; font-size:11.5px; border:1px solid var(--line);}
+  .file-drop{
+    position:relative; border:1px dashed var(--line); border-radius:4px; background:var(--panel-2);
+    min-height:280px; display:flex; align-items:center; justify-content:center; text-align:center;
+    padding:24px; transition:border-color .15s;
+  }
+  .file-drop.dragover{border-color:var(--amber);}
+  .file-drop input[type=file]{
+    position:absolute; inset:0; width:100%; height:100%; opacity:0; cursor:pointer;
+  }
+  .file-drop-text{color:var(--muted); font-size:13px; font-family:var(--mono); pointer-events:none;}
+  .file-meta{margin-top:10px; font-family:var(--mono); font-size:12px; color:var(--amber); min-height:16px;}
+  .skill-row{
+    border:1px solid var(--line); border-radius:4px; padding:10px 12px; margin-bottom:8px; background:var(--panel-2);
+  }
+  .skill-row-head{display:flex; align-items:center; gap:10px; flex-wrap:wrap;}
+  .skill-name{font-family:var(--mono); font-weight:600; font-size:13px;}
+  .strength-pill{
+    font-family:var(--mono); font-size:10.5px; text-transform:uppercase; padding:2px 7px; border-radius:3px; letter-spacing:0.04em;
+  }
+  .strength-none{background:#3a1f1c; color:var(--red);}
+  .strength-weak{background:#3a2f16; color:var(--amber);}
+  .strength-moderate{background:#20301f; color:#8fc97e;}
+  .strength-strong{background:#1a3324; color:var(--green);}
+  .req-pill{font-family:var(--mono); font-size:10.5px; color:var(--muted); border:1px solid var(--line); padding:2px 7px; border-radius:3px;}
+  .skill-reasoning{margin-top:6px; font-size:12.5px; color:var(--muted);}
+  .skill-transfer{margin-top:4px; font-size:12px; color:var(--amber);}
+  .suggestion-group{margin-bottom:16px;}
+  .suggestion-group h4{font-family:var(--mono); font-size:11px; text-transform:uppercase; color:var(--muted); margin:0 0 8px; letter-spacing:0.05em;}
+</style>
+</head>
+<body>
+<header>
+  <h1>ATS<span>::</span>DECISION ENGINE</h1>
+  <div class="sub">local instance — scoring is deterministic, LLMs extract only</div>
+</header>
+
+<main>
+  <div class="panel row">
+    <div class="row-inline">
+      <div>
+        <label for="apiBase">Backend URL</label>
+        <input type="text" id="apiBase" value="http://localhost:8000" />
+      </div>
+      <div>
+        <label for="companyName">Company name (optional — enables company-alignment scoring)</label>
+        <input type="text" id="companyName" placeholder="e.g. Acme Corp" />
+      </div>
+      <button class="secondary" id="researchBtn">Research company</button>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="panel">
+      <label for="jd">Job description (paste from the listing)</label>
+      <textarea id="jd" placeholder="Paste the full job description here..."></textarea>
+    </div>
+    <div class="panel">
+      <label for="resumeFile">Candidate resume — upload .pdf or .tex</label>
+      <div class="file-drop" id="fileDrop">
+        <input type="file" id="resumeFile" accept=".pdf,.tex" />
+        <div class="file-drop-text" id="fileDropText">Choose a .pdf or .tex file, or drag one here</div>
+      </div>
+      <div id="fileMeta" class="file-meta"></div>
+    </div>
+  </div>
+
+  <div class="row" style="margin-top:18px;">
+    <button id="evalBtn">Run evaluation</button>
+    <span id="status"></span>
+  </div>
+  <div id="errorBox" class="error"></div>
+
+  <div class="results" id="results">
+    <div class="score-hero">
+      <div class="score-num" id="overallScore">--<small>/100</small></div>
+      <div>
+        <div class="score-label">Overall ATS score</div>
+        <div class="cat-bars" id="catBars"></div>
+      </div>
+    </div>
+
+    <div class="cols2">
+      <div class="panel">
+        <h3>Strengths</h3>
+        <ul id="strengthsList"></ul>
+      </div>
+      <div class="panel">
+        <h3>Weaknesses</h3>
+        <ul id="weaknessesList"></ul>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:18px;">
+      <h3>Skill-by-skill breakdown (why the score is what it is)</h3>
+      <div id="skillBreakdown"></div>
+    </div>
+
+    <div class="cols2">
+      <div class="panel">
+        <h3>Missing must-have keywords</h3>
+        <div id="missingKeywords"></div>
+      </div>
+      <div class="panel">
+        <h3>AI-generated content risk</h3>
+        <div id="aiRisk"></div>
+      </div>
+    </div>
+
+    <div class="panel" style="margin-top:18px;" id="verdictPanel">
+      <h3>Verdict</h3>
+      <div class="verdict" id="verdictText"></div>
+    </div>
+
+    <div class="panel" style="margin-top:18px;" id="suggestionsPanel">
+      <h3>How to improve this resume's score — and your fit for this role</h3>
+      <div id="suggestionsBody"></div>
+    </div>
+
+    <details>
+      <summary>Raw extraction + evidence JSON (for debugging / audit)</summary>
+      <pre id="rawJson"></pre>
+    </details>
+  </div>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+
+function apiBase(){ return $('apiBase').value.replace(/\/$/, ''); }
+
+let selectedResumeFile = null;
+
+function setSelectedFile(file){
+  if(!file){ selectedResumeFile = null; $('fileMeta').textContent = ''; $('fileDropText').textContent = 'Choose a .pdf or .tex file, or drag one here'; return; }
+  const okExt = /\.(pdf|tex)$/i.test(file.name);
+  if(!okExt){
+    $('fileMeta').textContent = `"${file.name}" is not a .pdf or .tex file.`;
+    selectedResumeFile = null;
+    return;
+  }
+  selectedResumeFile = file;
+  $('fileDropText').textContent = 'File selected — click to choose a different one';
+  $('fileMeta').textContent = `${file.name} (${(file.size/1024).toFixed(0)} KB)`;
+}
+
+$('resumeFile').addEventListener('change', (e) => setSelectedFile(e.target.files[0]));
+
+const dropZone = $('fileDrop');
+['dragenter','dragover'].forEach(evt => dropZone.addEventListener(evt, (e) => {
+  e.preventDefault(); dropZone.classList.add('dragover');
+}));
+['dragleave','drop'].forEach(evt => dropZone.addEventListener(evt, (e) => {
+  e.preventDefault(); dropZone.classList.remove('dragover');
+}));
+dropZone.addEventListener('drop', (e) => {
+  const file = e.dataTransfer.files[0];
+  if(file){ $('resumeFile').files = e.dataTransfer.files; setSelectedFile(file); }
+});
+
+$('researchBtn').addEventListener('click', async () => {
+  const company = $('companyName').value.trim();
+  if(!company){ alert('Enter a company name first.'); return; }
+  $('status').textContent = 'researching company...';
+  try{
+    const resp = await fetch(apiBase() + '/api/companies/research', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({company_name: company, force_refresh: false})
+    });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.detail || 'Request failed');
+    $('status').textContent = `company profile ready (confidence: ${data.profile?.confidence ?? 'unknown'})`;
+  }catch(e){
+    $('status').textContent = '';
+    $('errorBox').textContent = 'Company research failed: ' + e.message;
+  }
+});
+
+$('evalBtn').addEventListener('click', async () => {
+  const jd_text = $('jd').value.trim();
+  $('errorBox').textContent = '';
+  if(!jd_text){
+    $('errorBox').textContent = 'Paste a job description first.';
+    return;
+  }
+  if(!selectedResumeFile){
+    $('errorBox').textContent = 'Choose a resume file (.pdf or .tex) first.';
+    return;
+  }
+  $('evalBtn').disabled = true;
+  $('status').textContent = 'extracting resume text + running scoring...';
+  $('results').style.display = 'none';
+
+  const form = new FormData();
+  form.append('jd_text', jd_text);
+  form.append('resume_file', selectedResumeFile);
+  const company = $('companyName').value.trim();
+  if(company) form.append('company_name', company);
+
+  try{
+    const resp = await fetch(apiBase() + '/api/evaluate', { method:'POST', body: form });
+    const data = await resp.json();
+    if(!resp.ok) throw new Error(data.detail || 'Evaluation failed');
+    renderResults(data);
+  }catch(e){
+    $('errorBox').textContent = 'Evaluation failed: ' + e.message + ' (is the backend running at ' + apiBase() + '?)';
+  }finally{
+    $('evalBtn').disabled = false;
+    $('status').textContent = '';
+  }
+});
+
+function renderResults(data){
+  $('results').style.display = 'block';
+  $('overallScore').innerHTML = data.overall_score + '<small>/100</small>';
+  $('status').textContent = data.resume_filename ? `scored: ${data.resume_filename}` : '';
+
+  const catBars = $('catBars');
+  catBars.innerHTML = '';
+  for(const [name, cat] of Object.entries(data.category_scores)){
+    const pct = cat.fraction === null ? 0 : Math.round(cat.fraction * 100);
+    const row = document.createElement('div');
+    row.className = 'cat-row';
+    row.innerHTML = `
+      <div>${name.replace(/_/g,' ')}</div>
+      <div class="cat-track"><div class="cat-fill" style="width:${pct}%"></div></div>
+      <div>${cat.points}/${cat.weight}</div>
+    `;
+    catBars.appendChild(row);
+  }
+
+  const strengthsList = $('strengthsList');
+  strengthsList.innerHTML = data.strengths.length
+    ? data.strengths.map(s => `<li class="strength">${escapeHtml(s)}</li>`).join('')
+    : '<li>None flagged.</li>';
+
+  const weaknessesList = $('weaknessesList');
+  weaknessesList.innerHTML = data.weaknesses.length
+    ? data.weaknesses.map(w => `<li class="weakness">${escapeHtml(w)}</li>`).join('')
+    : '<li>None flagged.</li>';
+
+  $('missingKeywords').innerHTML = data.missing_keywords.length
+    ? data.missing_keywords.map(k => `<span class="tag">${escapeHtml(k)}</span>`).join('')
+    : '<span style="color:var(--muted)">None — all must-have skills found.</span>';
+
+  renderSkillBreakdown(data.skill_breakdown || []);
+
+  const risk = data.ai_content_risk;
+  const riskClass = 'risk-' + risk.risk_level;
+  let riskHtml = `<div class="${riskClass}" style="font-family:var(--mono); font-size:16px; margin-bottom:8px;">${risk.risk_level.toUpperCase()} (pattern density: ${risk.density_per_500_words}/500 words${risk.llm_judgment_available ? ', LLM style judgment: ' + risk.llm_overall_likelihood : ''})</div>`;
+  riskHtml += `<div style="color:var(--muted); font-size:12px; margin-bottom:10px;">${escapeHtml(risk.caveat)}</div>`;
+  if(risk.flags && risk.flags.length){
+    riskHtml += '<div style="margin-bottom:10px;"><b style="font-family:var(--mono); font-size:11px; color:var(--muted);">PATTERN HITS</b></div>';
+    riskHtml += risk.flags.map(f => `<div style="margin-bottom:6px;"><span class="tag">${escapeHtml(f.label)}</span> ${f.hit_count} hit(s): <span style="color:var(--muted); font-size:12px;">${f.examples.map(escapeHtml).join(', ')}</span></div>`).join('');
+  }
+  if(risk.llm_flagged_snippets && risk.llm_flagged_snippets.length){
+    riskHtml += '<div style="margin:10px 0 6px;"><b style="font-family:var(--mono); font-size:11px; color:var(--muted);">LLM STYLE JUDGMENT</b></div>';
+    riskHtml += risk.llm_flagged_snippets.map(s => `<div style="margin-bottom:6px; font-size:12.5px;"><span style="color:var(--amber);">"${escapeHtml(s.snippet)}"</span> — ${escapeHtml(s.reason)}</div>`).join('');
+  }
+  $('aiRisk').innerHTML = riskHtml;
+
+  $('verdictPanel').style.display = data.verdict_text ? 'block' : 'none';
+  $('verdictText').textContent = data.verdict_text || '';
+
+  renderSuggestions(data.suggestions);
+
+  $('rawJson').textContent = JSON.stringify({
+    jd_extraction: data.jd_extraction,
+    resume_extraction: data.resume_extraction,
+    evidence_analysis: data.evidence_analysis,
+    company_alignment: data.company_alignment
+  }, null, 2);
+}
+
+function renderSkillBreakdown(skills){
+  const el = $('skillBreakdown');
+  if(!skills.length){ el.innerHTML = '<span style="color:var(--muted)">No skills to evaluate.</span>'; return; }
+  el.innerHTML = skills.map(s => {
+    const reqLabel = s.requirement_type === 'must_have' ? 'MUST-HAVE' : 'NICE-TO-HAVE';
+    let transferHtml = '';
+    if(s.related_skill_transfer){
+      transferHtml = `<div class="skill-transfer">↳ Partial credit: ${escapeHtml(s.transfer_explanation || '')}</div>`;
+    }
+    return `
+      <div class="skill-row">
+        <div class="skill-row-head">
+          <span class="skill-name">${escapeHtml(s.skill)}</span>
+          <span class="req-pill">${reqLabel}</span>
+          <span class="strength-pill strength-${s.evidence_strength}">${s.evidence_strength}</span>
+        </div>
+        <div class="skill-reasoning">${escapeHtml(s.reasoning)}${s.evidence_snippet ? ' — "' + escapeHtml(s.evidence_snippet) + '"' : ''}</div>
+        ${transferHtml}
+      </div>`;
+  }).join('');
+}
+
+function renderSuggestions(sugg){
+  const panel = $('suggestionsPanel');
+  if(!sugg){ panel.style.display = 'none'; return; }
+  panel.style.display = 'block';
+
+  const section = (title, items) => {
+    if(!items || !items.length) return '';
+    return `<div class="suggestion-group"><h4>${title}</h4><ul>${items.map(i => `<li>${escapeHtml(i)}</li>`).join('')}</ul></div>`;
+  };
+
+  let html = '';
+  if(sugg.summary_advice) html += `<div class="suggestion-group"><h4>Highest-leverage fix</h4><div style="font-size:14px;">${escapeHtml(sugg.summary_advice)}</div></div>`;
+  html += section('Skills to strengthen or add', sugg.skills_to_strengthen_or_add);
+  html += section('Project ideas (grounded in this role/company)', sugg.project_ideas);
+  html += section('Soft-skill / culture alignment tips', sugg.soft_skill_alignment_tips);
+  html += section('Resume writing fixes', sugg.resume_writing_fixes);
+  $('suggestionsBody').innerHTML = html || '<span style="color:var(--muted)">No specific suggestions generated.</span>';
+}
+
+function escapeHtml(s){
+  const div = document.createElement('div');
+  div.textContent = s;
+  return div.innerHTML;
+}
+</script>
+</body>
+</html>
